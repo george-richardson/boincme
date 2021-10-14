@@ -1,0 +1,215 @@
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Creates a spot fleet to run boinc as well as all the surrounding infrastructure.
+Parameters:
+  AMI:
+    Type: AWS::EC2::Image::Id
+    Description: "ID of the AMI to launch on the Spot Fleet. Make sure you use a boincme image for the region you are deploying to. "
+  MaxPrice:
+    Type: Number
+    Default: 0.05
+    Description: |
+      Max price per hour in USD to spend on the spot fleet for instances. 
+      Note this ONLY caps EC2 spot spend and DOES NOT include or cap other costs such as data transfer, EBS volume size etc. 
+      Example monthly costs: 0.05 per hour = ~$36.5 per month, 0.1 per hour = ~$73 per month, 0.2 per hour = ~$146 per month, 0.5 per hour = ~$365 per month
+  TargetCapacity: 
+    Type: Number
+    Default: 2
+    Description: "Number of vCPUs to target for creation by the spot fleet. This number may not be met if the MaxPrice parameter is set too low or if spot prices increase enough."
+  VolumeSize: 
+    Type: Number
+    Default: 8
+    Description: "Size in GB to use for the root volume of all launched instances. These are charged separately from the spot instances and so spending here will not be capped by the MaxPrice parameter."
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: 10.0.0.0/16
+  SubnetA: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt VPC.CidrBlock, 3, 8 ]]
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  SubnetB: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt VPC.CidrBlock, 3, 8 ]]
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  SubnetC: 
+    Type: AWS::EC2::Subnet
+    Properties: 
+      AvailabilityZone: !Select [2, !GetAZs ""]
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt VPC.CidrBlock, 3, 8 ]]
+      MapPublicIpOnLaunch: true
+      VpcId: !Ref VPC
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGatewayAttachment
+    Properties:
+       RouteTableId: !Ref RouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref InternetGateway
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetA
+      RouteTableId: !Ref RouteTable
+  SubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetB
+      RouteTableId: !Ref RouteTable
+  SubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref SubnetC
+      RouteTableId: !Ref RouteTable
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: Boinc Outbound
+      GroupDescription: Allow outbound traffic for boinc instances
+      VpcId:
+        Ref: VPC
+  InstanceRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: BoincInstance
+      Description: Allows EC2 instances SSM Parameter Store access to boinc namespace and SSM session manager capabilities.
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+  InstancePolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: "BoincInstance"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "ssm:UpdateInstanceInformation"
+              - "ssmmessages:CreateControlChannel"
+              - "ssmmessages:CreateDataChannel"
+              - "ssmmessages:OpenControlChannel"
+              - "ssmmessages:OpenDataChannel"
+            Resource: "*"
+          - Effect: "Allow"
+            Action: "ssm:GetParametersByPath"
+            Resource: !Join [ ":", [ "arn", !Ref "AWS::Partition", "ssm", !Ref "AWS::Region", !Ref "AWS::AccountId", "parameter/boinc/*" ] ]
+      Roles: 
+        - !Ref "InstanceRole"
+  InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - !Ref "InstanceRole"
+  FleetRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: BOINCFleet
+      Description: Allows AWS spot fleet to launch BOINC instances.
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Principal: 
+              Service: 
+                - "spotfleet.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetTaggingRole"
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: boincme
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt ["InstanceProfile", "Arn"]
+        ImageId: !Ref AMI
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: "/dev/sda1"
+            Ebs: 
+              DeleteOnTermination: true
+              Encrypted: false
+              VolumeType: gp2
+              VolumeSize: !Ref VolumeSize
+  Fleet:
+    Type: AWS::EC2::SpotFleet
+    Properties:
+      SpotFleetRequestConfigData:
+        TargetCapacity: !Ref TargetCapacity
+        SpotMaxTotalPrice: !Ref MaxPrice
+        AllocationStrategy: "lowestPrice"
+        ReplaceUnhealthyInstances: true
+        TerminateInstancesWithExpiration: true
+        Type: "maintain"
+        IamFleetRole: !GetAtt ["FleetRole", "Arn"]
+        LaunchTemplateConfigs: 
+          - LaunchTemplateSpecification: 
+              LaunchTemplateId: !Ref LaunchTemplate
+              Version: "$Latest"
+            Overrides: 
+              - InstanceType: c5.large 
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5d.large
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5a.large
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5ad.large
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5.xlarge 
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5d.xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5a.xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5ad.xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5.2xlarge 
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 8
+              - InstanceType: c5d.2xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 8
+              - InstanceType: c5a.2xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 8
+              - InstanceType: c5ad.2xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 8
