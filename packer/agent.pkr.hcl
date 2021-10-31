@@ -66,7 +66,7 @@ build {
   sources = ["source.amazon-ebs.agent"]
 
   provisioner "file" {
-    source = "./boinc-config/"
+    source = "./files/"
     destination = "/tmp"
   }
 

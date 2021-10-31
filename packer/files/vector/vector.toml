@@ -1,0 +1,14 @@
+[sources.journald_logs]
+  type = "journald"
+  include_units = ["boinc-client", "boinc-config"]
+  batch_size = 50
+
+[sinks.cloud_watch_logs]
+  type = "aws_cloudwatch_logs"
+  inputs = ["journald_logs"]
+  group_name = "${BOINC_STACK_NAME}"
+  create_missing_group = false
+  healthcheck = false
+  region = "${AWS_DEFAULT_REGION}"
+  stream_name = "${AWS_INSTANCE_ID}/{{_SYSTEMD_UNIT}}"
+  encoding = "json"
