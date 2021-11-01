@@ -1,4 +1,4 @@
 [Service]
-ExecStart=/boinc-config.sh
+ExecStart=/boincme-config.sh
 [Install]
 WantedBy=default.target

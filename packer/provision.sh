@@ -4,9 +4,9 @@ set -e
 export DEBIAN_FRONTEND="noninteractive"
 
 echo "Moving files around..."
-sudo mv /tmp/boinc-config/boinc-config-defaults.json /
-sudo mv /tmp/boinc-config/boinc-config.sh /
-sudo mv /tmp/boinc-config/boinc-config.service /etc/systemd/system/
+sudo mv /tmp/boincme-config/boincme-config-defaults.json /
+sudo mv /tmp/boincme-config/boincme-config.sh /
+sudo mv /tmp/boincme-config/boincme-config.service /etc/systemd/system/
 
 echo "Upgrading existing packages..."
 sudo apt update > /dev/null 2>&1
@@ -36,5 +36,5 @@ sudo mv /tmp/vector/vector.toml /etc/vector/vector.toml
 echo "Disabling vector..."
 sudo systemctl disable vector > /dev/null 2>&1
 
-echo "Enabling boinc-config unit for startup..."
-sudo systemctl enable boinc-config > /dev/null 2>&1
+echo "Enabling boincme-config unit for startup..."
+sudo systemctl enable boincme-config > /dev/null 2>&1

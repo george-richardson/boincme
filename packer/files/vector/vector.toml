@@ -1,6 +1,6 @@
 [sources.journald_logs]
   type = "journald"
-  include_units = ["boinc-client", "boinc-config"]
+  include_units = ["boinc-client", "boincme-config"]
   batch_size = 50
 
 [sinks.cloud_watch_logs]

@@ -22,7 +22,7 @@ Parameters:
     Description: "Size in GB to use for the root volume of all launched instances. These are charged separately from the spot instances and so spending here will not be capped by the MaxPrice parameter."
   LogRetention:
     Type: Number
-    Description: "Number of days to retain boinc-client and boinc-config logs for. This value will be ignored if the SSM parameter disable_logs is set to true."
+    Description: "Number of days to retain boinc-client and boincme-config logs for. This value will be ignored if the SSM parameter disable_logs is set to true."
     Default: 7
     AllowedValues: # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-logs-loggroup.html#aws-resource-logs-loggroup-properties
       - 1
@@ -222,7 +222,7 @@ Resources:
         SecurityGroupIds:
           - !Ref SecurityGroup
         BlockDeviceMappings:
-          - DeviceName: "/dev/xvda"
+          - DeviceName: "/dev/sda1" # TODO This doesn't apply for all instance types
             Ebs: 
               DeleteOnTermination: true
               Encrypted: false
