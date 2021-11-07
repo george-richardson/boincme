@@ -211,10 +211,10 @@ Resources:
       Tags:
         - Key: boincme
           Value: !Ref AWS::StackName
-  LaunchTemplate:
+  LaunchTemplateEBS:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Ref AWS::StackName
+      LaunchTemplateName: !Sub "${AWS::StackName}-EBS"
       LaunchTemplateData:
         IamInstanceProfile:
           Arn: !GetAtt ["InstanceProfile", "Arn"]
@@ -222,7 +222,33 @@ Resources:
         SecurityGroupIds:
           - !Ref SecurityGroup
         BlockDeviceMappings:
-          - DeviceName: "/dev/sda1" # TODO This doesn't apply for all instance types
+          - DeviceName: "/dev/sda1"
+            Ebs: 
+              DeleteOnTermination: true
+              Encrypted: false
+              VolumeType: gp2
+              VolumeSize: !Ref VolumeSize
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+              - Key: boincme
+                Value: !Ref AWS::StackName
+              - Key: Name
+                Value: !Ref AWS::StackName
+        UserData: 
+          Fn::Base64: !Sub "{ \"stack_name\": \"${AWS::StackName}\", \"ssm_prefix\": \"${SSMParameterStorePrefix}\" }" 
+  LaunchTemplateLocalStorage:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub "${AWS::StackName}-LocalStorage"
+      LaunchTemplateData:
+        IamInstanceProfile:
+          Arn: !GetAtt ["InstanceProfile", "Arn"]
+        ImageId: !Ref AMI
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        BlockDeviceMappings:
+          - DeviceName: "/dev/xvda"
             Ebs: 
               DeleteOnTermination: true
               Encrypted: false
@@ -250,42 +276,58 @@ Resources:
         IamFleetRole: !GetAtt ["FleetRole", "Arn"]
         LaunchTemplateConfigs: 
           - LaunchTemplateSpecification: 
-              LaunchTemplateId: !Ref LaunchTemplate
+              LaunchTemplateId: !Ref LaunchTemplateEBS
               Version: "$Latest"
             Overrides: 
               - InstanceType: c5.large 
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 2
-              - InstanceType: c5d.large
-                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
-                WeightedCapacity: 2
               - InstanceType: c5a.large
-                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
-                WeightedCapacity: 2
-              - InstanceType: c5ad.large
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 2
               - InstanceType: c5.xlarge 
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 4
-              - InstanceType: c5d.xlarge
-                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
-                WeightedCapacity: 4
               - InstanceType: c5a.xlarge
-                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
-                WeightedCapacity: 4
-              - InstanceType: c5ad.xlarge
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 4
               - InstanceType: c5.2xlarge 
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 8
-              - InstanceType: c5d.2xlarge
+              - InstanceType: c5a.2xlarge
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 8
-              - InstanceType: c5a.2xlarge
+              - InstanceType: c5.4xlarge 
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 16
+              - InstanceType: c5a.4xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 16
+          - LaunchTemplateSpecification: 
+              LaunchTemplateId: !Ref LaunchTemplateLocalStorage
+              Version: "$Latest"
+            Overrides:              
+              - InstanceType: c5d.large
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5ad.large
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 2
+              - InstanceType: c5d.xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5ad.xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 4
+              - InstanceType: c5d.2xlarge
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 8
               - InstanceType: c5ad.2xlarge
                 SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
                 WeightedCapacity: 8
+              - InstanceType: c5d.4xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 16
+              - InstanceType: c5ad.4xlarge
+                SubnetId: !Join [",", [!Ref "SubnetA", !Ref "SubnetB", !Ref "SubnetC"]]
+                WeightedCapacity: 16
